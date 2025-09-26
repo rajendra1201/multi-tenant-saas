@@ -10,6 +10,7 @@ use BotMan\BotMan\Messages\Conversations\Conversation;
 use BotMan\BotMan\Messages\Incoming\Answer;
 use BotMan\BotMan\Messages\Outgoing\Question;
 use BotMan\BotMan\Messages\Outgoing\Actions\Button;
+use Exception;
 
 class OnboardingConversation extends Conversation
 {
@@ -66,7 +67,7 @@ class OnboardingConversation extends Conversation
 
     public function askBusinessType()
     {
-        $question = Question::create('What type of business do you have?');
+        $question = Question::create('What type of business do you have? You can tap a button or type it (e.g., Gym, Kirana, Clothing, Restaurant, Salon).');
 
         $businessTypes = $this->businessTypeService->getBusinessTypes();
 
@@ -75,7 +76,19 @@ class OnboardingConversation extends Conversation
         }
 
         $this->ask($question, function (Answer $answer) {
-            $this->businessType = $answer->getValue();
+            $rawValue = $answer->getValue();
+            $rawText = trim((string) $answer->getText());
+
+            // Prefer button value if present; otherwise map free text to a known type
+            $selected = $rawValue ?: $this->businessTypeService->mapFreeTextToType($rawText);
+
+            if ($selected === null) {
+                $this->say('I did not recognize that business type. Please choose one of the options or type Gym, Kirana, Clothing, Restaurant, or Salon.');
+                $this->askBusinessType();
+                return;
+            }
+
+            $this->businessType = $selected;
             $this->confirmDetails();
         });
     }
@@ -84,11 +97,11 @@ class OnboardingConversation extends Conversation
     {
         $businessTypeData = $this->businessTypeService->getBusinessType($this->businessType);
 
-        $details = "Let me confirm your details:nn";
-        $details .= "🏢 Business: {$this->businessName}n";
-        $details .= "👤 Owner: {$this->ownerName}n";
-        $details .= "📧 Email: {$this->ownerEmail}n";
-        $details .= "🏪 Type: {$businessTypeData['name']}nn";
+        $details = "Let me confirm your details:\n\n";
+        $details .= "🏢 Business: {$this->businessName}\n";
+        $details .= "👤 Owner: {$this->ownerName}\n";
+        $details .= "📧 Email: {$this->ownerEmail}\n";
+        $details .= "🏪 Type: {$this->escapeText($businessTypeData['name'])}\n\n";
         $details .= "Is this correct?";
 
         $question = Question::create($details);
@@ -131,5 +144,11 @@ class OnboardingConversation extends Conversation
             $this->say('❌ Sorry, there was an error creating your business. Please try again or contact support.');
             logger()->error('Tenant creation failed: ' . $e->getMessage());
         }
+    }
+
+    private function escapeText(string $text): string
+    {
+        // Basic escaping for any characters that could be misinterpreted
+        return str_replace(["\r\n", "\r", "\n"], "\n", $text);
     }
 }

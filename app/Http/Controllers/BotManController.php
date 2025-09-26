@@ -21,18 +21,17 @@ class BotManController extends Controller
 
         // BotMan config
         $config = [
-            'conversation_cache_time' => 30,
-            'user_cache_time'         => 30,
+            'conversation_cache_time' => 600,
+            'user_cache_time'         => 600,
         ];
 
         // Pass IlluminateCache() as the cache driver
         $botman = BotManFactory::create($config, new BotManCache(), $request);
 
-        // Start conversation triggers
-        $botman->hears('start', fn($botman) => $botman->startConversation(new OnboardingConversation()));
-        $botman->hears('hello', fn($botman) => $botman->startConversation(new OnboardingConversation()));
-        $botman->hears('hi',    fn($botman) => $botman->startConversation(new OnboardingConversation()));
-        $botman->hears('begin', fn($botman) => $botman->startConversation(new OnboardingConversation()));
+        // Start conversation triggers (case-insensitive)
+        $botman->hears('/^(start|hello|hi|begin)$/i', function ($botman) {
+            $botman->startConversation(new OnboardingConversation());
+        });
 
         // Fallback
         $botman->fallback(function ($botman) {
